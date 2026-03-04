@@ -72,12 +72,13 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
     - Example utility implementation:
       ```python
       # utils/call_llm.py
+      import os
       from openai import OpenAI
 
-      def call_llm(prompt):    
-          client = OpenAI(api_key="YOUR_API_KEY_HERE")
+      def call_llm(prompt):
+          client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
           r = client.chat.completions.create(
-              model="gpt-4o",
+              model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
               messages=[{"role": "user", "content": prompt}]
           )
           return r.choices[0].message.content
@@ -151,15 +152,24 @@ my_project/
 │   ├── __init__.py
 │   ├── call_llm.py
 │   └── search_web.py
+├── .env
 ├── requirements.txt
 └── docs/
     └── design.md
 ```
 
+- **`.env`**: Stores API keys and configuration. **Never commit this file to version control.**
+  ```
+  OPENAI_API_KEY=your-api-key-here
+  # GEMINI_API_KEY=your-gemini-key-here
+  # ANTHROPIC_API_KEY=your-anthropic-key-here
+  ```
+
 - **`requirements.txt`**: Lists the Python dependencies for the project.
   ```
   PyYAML
   pocketflow
+  python-dotenv
   ```
 
 - **`docs/design.md`**: Contains project documentation for each step above. This should be *high-level* and *no-code*.
@@ -249,24 +259,22 @@ my_project/
   - It's recommended to dedicate one Python file to each API call, for example `call_llm.py` or `search_web.py`.
   - Each file should also include a `main()` function to try that API call
   ```python
-  from google import genai
   import os
+  from openai import OpenAI
 
   def call_llm(prompt: str) -> str:
-      client = genai.Client(
-          api_key=os.getenv("GEMINI_API_KEY", ""),
+      client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+      r = client.chat.completions.create(
+          model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
+          messages=[{"role": "user", "content": prompt}]
       )
-      model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-      response = client.models.generate_content(model=model, contents=[prompt])
-      return response.text
+      return r.choices[0].message.content
 
   if __name__ == "__main__":
       test_prompt = "Hello, how are you?"
-
-      # First call - should hit the API
       print("Making call...")
-      response1 = call_llm(test_prompt, use_cache=False)
-      print(f"Response: {response1}")
+      response = call_llm(test_prompt)
+      print(f"Response: {response}")
   ```
 
 - **`nodes.py`**: Contains all the node definitions.
@@ -320,6 +328,9 @@ my_project/
 - **`main.py`**: Serves as the project's entry point.
   ```python
   # main.py
+  from dotenv import load_dotenv
+  load_dotenv()
+
   from flow import create_qa_flow
 
   # Example main function
@@ -387,6 +398,15 @@ From there, it’s easy to implement popular design patterns:
 - [Structured Output](./design_pattern/structure.md) formats outputs consistently.
 - [(Advanced) Multi-Agents](./design_pattern/multi_agent.md) coordinate multiple agents.
 
+Additional patterns (see [cookbook examples](https://github.com/The-Pocket/PocketFlow#how-does-pocket-flow-work)):
+
+- **Streaming**: Real-time token-by-token LLM output with user interrupt capability.
+- **MCP (Model Context Protocol)**: Integrate external tool servers as agent actions.
+- **Memory**: Short-term and long-term memory for persistent conversations.
+- **Supervisor**: Add a supervision layer over unreliable agents.
+- **Human-in-the-Loop (HITL)**: Pause flows for human review and feedback.
+- **Majority Vote**: Improve reasoning accuracy by aggregating multiple attempts.
+
 <div align="center">
   <img src="https://github.com/the-pocket/.github/raw/main/assets/design.png" width="500"/>
 </div>
@@ -402,6 +422,7 @@ We **do not** provide built-in utilities. Instead, we offer *examples*—please 
 - [Embedding](./utility_function/embedding.md)
 - [Vector Databases](./utility_function/vector.md)
 - [Text-to-Speech](./utility_function/text_to_speech.md)
+- [MCP Tools](https://modelcontextprotocol.io/) (external tool servers for agents)
 
 **Why not built-in?**: I believe it's a *bad practice* for vendor-specific APIs in a general framework:
 - *API Volatility*: Frequent changes lead to heavy maintenance for hardcoded APIs.
@@ -1649,10 +1670,11 @@ Here, we provide some minimal example implementations:
 1. OpenAI
     ```python
     def call_llm(prompt):
+        import os
         from openai import OpenAI
-        client = OpenAI(api_key="YOUR_API_KEY_HERE")
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         r = client.chat.completions.create(
-            model="gpt-4o",
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
             messages=[{"role": "user", "content": prompt}]
         )
         return r.choices[0].message.content
@@ -1666,8 +1688,9 @@ Here, we provide some minimal example implementations:
 2. Claude (Anthropic)
     ```python
     def call_llm(prompt):
+        import os
         from anthropic import Anthropic
-        client = Anthropic(api_key="YOUR_API_KEY_HERE")
+        client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         r = client.messages.create(
             model="claude-sonnet-4-0",
             messages=[
@@ -1677,29 +1700,31 @@ Here, we provide some minimal example implementations:
         return r.content[0].text
     ```
 
-3. Google (Generative AI Studio / PaLM API)
+3. Google (Gemini)
     ```python
     def call_llm(prompt):
-    from google import genai
-    client = genai.Client(api_key='GEMINI_API_KEY')
+        import os
+        from google import genai
+        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         response = client.models.generate_content(
-        model='gemini-2.5-pro',
-        contents=prompt
-    )
-    return response.text
+            model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=prompt
+        )
+        return response.text
     ```
 
 4. Azure (Azure OpenAI)
     ```python
     def call_llm(prompt):
+        import os
         from openai import AzureOpenAI
         client = AzureOpenAI(
-            azure_endpoint="https://<YOUR_RESOURCE_NAME>.openai.azure.com/",
-            api_key="YOUR_API_KEY_HERE",
-            api_version="2023-05-15"
+            azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+            api_version="2024-12-01-preview"
         )
         r = client.chat.completions.create(
-            model="<YOUR_DEPLOYMENT_NAME>",
+            model=os.environ.get("AZURE_DEPLOYMENT_NAME", "gpt-4o"),
             messages=[{"role": "user", "content": prompt}]
         )
         return r.choices[0].message.content
@@ -1710,7 +1735,7 @@ Here, we provide some minimal example implementations:
     def call_llm(prompt):
         from ollama import chat
         response = chat(
-            model="llama2",
+            model="llama3.3",
             messages=[{"role": "user", "content": prompt}]
         )
         return response.message.content
@@ -1723,10 +1748,11 @@ Feel free to enhance your `call_llm` function as needed. Here are examples:
 
 ```python
 def call_llm(messages):
+    import os
     from openai import OpenAI
-    client = OpenAI(api_key="YOUR_API_KEY_HERE")
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     r = client.chat.completions.create(
-        model="gpt-4o",
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
         messages=messages
     )
     return r.choices[0].message.content
