@@ -3,141 +3,142 @@ layout: default
 title: "Agentic Coding"
 ---
 
-# Agentic Coding 2026: Precision Implementation Rules
+# Agentic Coding: Humans Design, Agents code!
 
-> This file is the execution policy for coding agents (GPT, Claude, Gemini, and others). Treat these rules as mandatory unless a human explicitly overrides them.
+> If you are an AI agent involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
 {: .warning }
 
-## Non-Negotiable Principles
+## Agentic Coding Steps
 
-1. **Design before code**: Update `docs/design.md` first, then implement.
-2. **Minimalist by default**: Choose the simplest flow that satisfies requirements.
-3. **Deterministic data contracts**: Use explicit schema + type hints for shared data and node I/O.
-4. **Node-owned reliability**: Handle failures with PocketFlow node retries/fallbacks, not utility-level exception swallowing.
-5. **Modern Python only**: Prefer explicit types, f-strings, and async/await when work is I/O-bound.
+Agentic Coding should be a collaboration between Human System Design and Agent Implementation:
 
-## Required Build Order (Do Not Skip)
+| Steps                  | Human      | AI        | Comment                                                                 |
+|:-----------------------|:----------:|:---------:|:------------------------------------------------------------------------|
+| 1. Requirements | ★★★ High  | ★☆☆ Low   | Humans understand the requirements and context.                    |
+| 2. Flow          | ★★☆ Medium | ★★☆ Medium |  Humans specify the high-level design, and the AI fills in the details. |
+| 3. Utilities   | ★★☆ Medium | ★★☆ Medium | Humans provide available external APIs and integrations, and the AI helps with implementation. |
+| 4. Data          | ★☆☆ Low    | ★★★ High   | AI designs the data schema, and humans verify.                            |
+| 5. Node          | ★☆☆ Low   | ★★★ High  | The AI helps design the node based on the flow.          |
+| 6. Implementation      | ★☆☆ Low   | ★★★ High  |  The AI implements the flow based on the design. |
+| 7. Optimization        | ★★☆ Medium | ★★☆ Medium | Humans evaluate the results, and the AI helps optimize. |
+| 8. Reliability         | ★☆☆ Low   | ★★★ High  |  The AI writes test cases and addresses corner cases.     |
 
-1. **Requirements**
-     - Restate user problem as concrete user-facing outcomes.
-     - Keep first implementation narrow and testable.
+1. **Requirements**: Clarify the requirements for your project, and evaluate whether an AI system is a good fit. 
+    - Understand AI systems' strengths and limitations:
+      - **Good for**: Routine tasks requiring common sense (filling forms, replying to emails)
+      - **Good for**: Creative tasks with well-defined inputs (building slides, writing SQL)
+      - **Not good for**: Ambiguous problems requiring complex decision-making (business strategy, startup planning)
+    - **Keep It User-Centric:** Explain the "problem" from the user's perspective rather than just listing features.
+    - **Balance complexity vs. impact**: Aim to deliver the highest value features with minimal complexity early.
 
-2. **Flow Design (in `docs/design.md`)**
-     - Specify design pattern (Workflow, Agent, RAG, MapReduce, etc.) and why.
-     - Provide one-line purpose for each node.
-     - Include a Mermaid diagram with actions/branches.
+2. **Flow Design**: Outline at a high level, describe how your AI system orchestrates nodes.
+    - Identify applicable design patterns (e.g., [Map Reduce](./design_pattern/mapreduce.md), [Agent](./design_pattern/agent.md), [RAG](./design_pattern/rag.md)).
+      - For each node in the flow, start with a high-level one-line description of what it does.
+      - If using **Map Reduce**, specify how to map (what to split) and how to reduce (how to combine).
+      - If using **Agent**, specify what are the inputs (context) and what are the possible actions.
+      - If using **RAG**, specify what to embed, noting that there's usually both offline (indexing) and online (retrieval) workflows.
+    - Outline the flow and draw it in a mermaid diagram. For example:
+      ```mermaid
+      flowchart LR
+          start[Start] --> batch[Batch]
+          batch --> check[Check]
+          check -->|OK| process
+          check -->|Error| fix[Fix]
+          fix --> check
+          
+          subgraph process[Process]
+            step1[Step 1] --> step2[Step 2]
+          end
+          
+          process --> endNode[End]
+      ```
+    - > **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.  
+      {: .best-practice }
 
-3. **Schema-First Data Design (in `docs/design.md` before coding)**
-     - Define the Shared Store schema first.
-     - Add explicit Python typing for store shape (prefer `TypedDict`, dataclasses, or precise aliases).
-     - For each node, document:
-         - keys read in `prep`
-         - value returned by `exec`
-         - keys written in `post`
-     - If implementation changes data flow, update schema in `docs/design.md` first.
+3. **Utilities**: Based on the Flow Design, identify and implement necessary utility functions.
+    - Think of your AI system as the brain. It needs a body—these *external utility functions*—to interact with the real world:
+        <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/utility.png?raw=true" width="400"/></div>
 
-4. **Utility Design**
-     - Utilities are external interfaces only (API calls, file/database I/O, web/search, etc.).
-     - Keep utilities small, composable, and side-effect transparent.
-     - Document utility input/output types.
+        - Reading inputs (e.g., retrieving Slack messages, reading emails)
+        - Writing outputs (e.g., generating reports, sending emails)
+        - Using external tools (e.g., calling LLMs, searching the web)
+        - **NOTE**: *LLM-based tasks* (e.g., summarizing text, analyzing sentiment) are **NOT** utility functions; rather, they are *core functions* internal in the AI system.
+    - For each utility function, implement it and write a simple test.
+    - Document their input/output, as well as why they are necessary. For example:
+      - `name`: `get_embedding` (`utils/get_embedding.py`)
+      - `input`: `str`
+      - `output`: a vector of 3072 floats
+      - `necessity`: Used by the second node to embed text
+    - Example utility implementation:
+      ```python
+      # utils/call_llm.py
+      from openai import OpenAI
 
-5. **Node/Flow Implementation**
-     - Implement from design with minimal deviation.
-     - Keep logic in nodes; keep utilities thin.
+      def call_llm(prompt):    
+          client = OpenAI(api_key="YOUR_API_KEY_HERE")
+          r = client.chat.completions.create(
+              model="gpt-4o",
+              messages=[{"role": "user", "content": prompt}]
+          )
+          return r.choices[0].message.content
+          
+      if __name__ == "__main__":
+          prompt = "What is the meaning of life?"
+          print(call_llm(prompt))
+      ```
+    - > **Sometimes, design Utilities before Flow:**  For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
+      {: .best-practice }
+    - > **Avoid Exception Handling in Utilities**: If a utility function is called from a Node's `exec()` method, avoid using `try...except` blocks within the utility. Let the Node's built-in retry mechanism handle failures.
+      {: .warning }
 
-6. **Reliability + Validation**
-     - Add focused checks/tests for critical paths.
-     - Verify schema consistency and action routing.
+4. **Data Design**: Design the shared store that nodes will use to communicate.
+   - One core design principle for PocketFlow is to use a well-designed [shared store](./core_abstraction/communication.md)—a data contract that all nodes agree upon to retrieve and store data.
+      - For simple systems, use an in-memory dictionary.
+      - For more complex systems or when persistence is required, use a database.
+      - **Don't Repeat Yourself**: Use in-memory references or foreign keys.
+      - Example shared store design:
+        ```python
+        shared = {
+            "user": {
+                "id": "user123",
+                "context": {                # Another nested dict
+                    "weather": {"temp": 72, "condition": "sunny"},
+                    "location": "San Francisco"
+                }
+            },
+            "results": {}                   # Empty dict to store outputs
+        }
+        ```
 
-## PocketFlow Lifecycle Contract (Mandatory)
+5. **Node Design**: Plan how each node will read and write data, and use utility functions.
+   - For each [Node](./core_abstraction/node.md), describe its type, how it reads and writes data, and which utility function it uses. Keep it specific but high-level without codes. For example:
+     - `type`: Regular (or Batch, or Async)
+     - `prep`: Read "text" from the shared store
+     - `exec`: Call the embedding utility function. **Avoid exception handling here**; let the Node's retry mechanism manage failures.
+     - `post`: Write "embedding" to the shared store
 
-For **every Node**, strictly follow `prep -> exec -> post`:
+6. **Implementation**: Implement the initial nodes and flows based on the design.
+   - 🎉 If you've reached this step, humans have finished the design. Now *Agentic Coding* begins!
+   - **"Keep it simple, stupid!"** Avoid complex features and full-scale type checking.
+   - **FAIL FAST**! Leverage the built-in [Node](./core_abstraction/node.md) retry and fallback mechanisms to handle failures gracefully. This helps you quickly identify weak points in the system.
+   - Add logging throughout the code to facilitate debugging.
 
-- **`prep(shared)`**: read and preprocess from shared store only.
-- **`exec(prep_res)`**: compute only; no shared-store mutation.
-- **`post(shared, prep_res, exec_res)`**: write results + decide next action.
+7. **Optimization**:
+   - **Use Intuition**: For a quick initial evaluation, human intuition is often a good start.
+   - **Redesign Flow (Back to Step 3)**: Consider breaking down tasks further, introducing agentic decisions, or better managing input contexts.
+   - If your flow design is already solid, move on to micro-optimizations:
+     - **Prompt Engineering**: Use clear, specific instructions with examples to reduce ambiguity.
+     - **In-Context Learning**: Provide robust examples for tasks that are difficult to specify with instructions alone.
 
-Do not collapse responsibilities across phases unless there is a clear and documented reason.
+   - > **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
+     >
+     > <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/success.png?raw=true" width="400"/></div>
+     {: .best-practice }
 
-## Strict Type Hinting Policy (Mandatory)
-
-- All new or modified Python functions must include type hints.
-- Every node method (`prep`, `exec`, `post`, async variants) must have explicit return types.
-- Shared Store keys must be typed via schema objects (prefer `TypedDict`; use nested types where needed).
-- Utility function signatures must be fully typed.
-- Avoid `Any` unless justified in `docs/design.md`.
-
-## Fault Tolerance Policy (Mandatory)
-
-- **Forbidden in utility functions**: `try/except` that catches and masks operational errors.
-- Utilities should raise errors naturally.
-- Reliability belongs to nodes via:
-    - `max_retries`
-    - `wait`
-    - `exec_fallback` / `exec_fallback_async`
-- Use assertions/validation in `exec` to trigger retries when outputs are malformed.
-
-## Modern Python + Minimalism Standard
-
-- Use Python 3.11+ style where possible:
-    - f-strings for formatting
-    - `pathlib` over brittle string paths
-    - `async/await` for I/O-bound concurrency
-    - small pure functions and clear names
-- Keep PocketFlow code lean:
-    - minimal abstractions
-    - no speculative architecture
-    - no unnecessary dependencies
-
-## Agent Execution Checklist (Before Writing Code)
-
-The coding agent must verify all items are true:
-
-1. `docs/design.md` exists and reflects latest requirements.
-2. Shared Store schema is explicit and typed.
-3. Node lifecycle responsibilities are defined per node.
-4. Utility interfaces are listed with typed signatures.
-5. Reliability strategy uses node retries/fallbacks (not utility `try/except`).
-
-If any item is missing, update `docs/design.md` first, then proceed.
-
-## Reference Node Template (Typed)
-
-```python
-from __future__ import annotations
-
-from typing import TypedDict
-from pocketflow import Node
-
-
-class SharedStore(TypedDict):
-        question: str
-        answer: str
-
-
-class AnswerNode(Node):
-        def prep(self, shared: SharedStore) -> str:
-                return shared["question"]
-
-        def exec(self, prep_res: str) -> str:
-                response = call_llm(f"Answer briefly: {prep_res}")
-                assert isinstance(response, str) and response.strip()
-                return response
-
-        def post(self, shared: SharedStore, prep_res: str, exec_res: str) -> str:
-                shared["answer"] = exec_res
-                return "default"
-```
-
-## Enforcement Tone for All LLM Agents
-
-When acting as an implementation agent in this repository:
-
-- Be precise, constrained, and schema-driven.
-- Prefer correctness over cleverness.
-- Never skip design/schema updates.
-- Never bypass the node lifecycle contract.
-- Never move fault handling into utility `try/except`.
+8. **Reliability**  
+   - **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `max_retries` and `wait` times.
+   - **Logging and Visualization**: Maintain logs of all attempts and visualize node results for easier debugging.
+   - **Self-Evaluation**: Add a separate node (powered by an LLM) to review outputs when results are uncertain.
 
 ## Example LLM Project File Structure
 
